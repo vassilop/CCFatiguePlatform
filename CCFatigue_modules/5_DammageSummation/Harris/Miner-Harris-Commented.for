@@ -9,13 +9,14 @@
          real f(10000),u(10000),v(10000)
          real y(100),x1(100),x2(100),XM(100,3), YM(100,1), XMT(3,100)
          real XTX(3,3),INVXTX(3,3),XTY(3,1), Bet(3,1)
+         real Range,Smean,RR,nn,NNN,Cumulative,Fact,HSF,LSF,STEP
+         real(8) jj,Damage
 
          CHARACTER*40 NAME, NAM
 
          ! Enter the input file name and open it for reading
          !####################################################################
          OPEN (10, FILE = 'input.txt')
-         OPEN (20, FILE = 'output.txt')
 
          !"GIVE THE CRITICAL STRESS RATIO, static values and N "
          OPEN(100, FILE = 'staticvalue.txt')
@@ -49,25 +50,13 @@
                go to 20
             end if
             PreSR=R(NOR)
-   20    end do
+         20	end do
          oldNOD(NOR)=m
-
-         !####################################################################
-         !Error message if number of R-ratios were less than 3
-         if (NOR.LT.3) then
-            WRITE(20,*) "Input data is not enough to apply Haris' method."
-            WRITE(20,*) NOR
-            do i=1,NOR
-               WRITE(20,*) R(i)
-            end do
-            go to 10
-         end if
 
          !####################################################################
          !Calculate the amplitude and mean stress
          do j=1,NOR ! For each stress_ratios
             do i=1,oldNOD(j) ! For each sample in stress_ratio
-               ! if abs(stress_ratio) > 1
                if (abs(R(j)).GT.1) then
                   asigma(j,i)=(1-(1/R(j)))*maxsigma(j,i)/2
                   msigma(j,i)=-(1+(1/R(j)))*maxsigma(j,i)/2
@@ -84,23 +73,21 @@
          !Log(a)=Log(f)+uLog(1-m)+vLog(c+m) or in the following formulation y=Log(f)+u*x1+v*x2
 
          NOD=oldNOD(1)
-         do j=1,NOD ! For each sample in first stress_ratio
+         do j=1,NOD ! For each sample in first stress_ratio !!!
             do i=1,NOR ! For each stress_ratio
 
                y(i) = log10(asigma(i,j) / UTS)
 
                if ((msigma(i,j)).GT.0) then
                   if ((msigma(i,j)).GT.UTS) then
-                     msigma(i,j)=0.99*UTS
+                     !msigma(i,j)=0.99*UTS
                   end if
                end if
                if ((msigma(i,j)).LT.0) then
                   if (abs(msigma(i,j)).GT.UCS) then
-                     msigma(i,j)=-0.99*UCS
+                     !msigma(i,j)=-0.99*UCS
                   end if
                end if
-               ! if msigma(i,j) == 0 ??????
-
                x1(i)=log10(1-(msigma(i,j)/UTS))
                x2(i)=log10((UCS/UTS)+(msigma(i,j)/UTS))
                XM(i,1)=1
@@ -114,13 +101,11 @@
             !WRITE(20,*) XM(2,3),XM(3,1), XM(3,2),XM(3,3)
             !WRITE(20,*) YM(1,1),YM(2,1),YM(3,1)
 
-
             ! https://help.imsl.com/fortran/6.0/math/default.htm?turl=mxtxf.htm
             ! XM(100, 3)
             ! XTX(3, 3)
             ! Fortran 77 => CALL MXTXF (NRA, NCA, A, LDA, NB, B, LDB)
             CALL MXTXF(100,3,XM,100,3,XTX,3)	!Computes the transpose product of a matrix, ATA. For inversion matrix has to be a squared matrix!
-
 
             !WRITE(20,*) 'XTX     #############################'
             !WRITE(20,*) XTX(1,1),XTX(1,2),XTX(1,3),XTX(2,1),XTX(2,2)
@@ -192,39 +177,113 @@
          B2=ub-A2*Xb
          B3=vb-A3*Xb
 
-         !Write output file
+
+         10	CLOSE(UNIT=10)
+
+
+         !Miner part
          !####################################################################
+         OPEN (30, FILE = 'CCInput.txt')
+         OPEN (40, FILE = 'Factor.txt')
+         OPEN (50, FILE = 'Miner.txt')
+         READ (40,*) HSF, LSF, STEP
+         do Fact=HSF, LSF, -STEP
 
-         do t=1,7
-            ff=A1*log10(ONC(t))+B1
-            uu=A2*log10(ONC(t))+B2
-            vv=A3*log10(ONC(t))+B3
+            Damage=0
+            jj=1.0
+            Sa=10000.0
+            do while (.NOT.EOF (30))
+               READ (30,*) Range, Smean, RR, nn, Cumulative
 
+               Smean=Fact*Smean
+               Range=Fact*Range
+               Samp=Smean*((1-RR)/(1+RR))
+               Stlev=Smean+Range/2
+               if (MaxStlev.LT.Stlev) then
+                  MaxStlev=Stlev
+               end if
+               do while ((jj.LT.1000).AND.(Sa.GE.Samp))
 
-            Sm=-UCS
-            C2=ff*(1-Sm/UTS)**uu
-            C3=0
-            Sa=C2*C3*UTS
-            write(20,*) ONC(t),Sa,Sm
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+1
+               end do
 
+               do while ((jj.GE.1000).AND.(jj.LE.10E5).AND.(Sa.GE.Samp))
 
-            do Sm=-0.90*UCS,0.90*UTS,0.90*(UTS+UCS)/40
-               C2=ff*(1-Sm/UTS)**uu
-               C3=((UCS/UTS)+(Sm/UTS))**vv
-               Sa=C2*C3*UTS
-               write(20,*) ONC(t),Sa,Sm
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+10
+               end do
+
+               do while ((jj.GE.10E5).AND.(jj.LT.10E8).AND.(Sa.GE.Samp))
+
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+10000
+               end do
+
+               do while ((jj.GE.10E8).AND.(jj.LT.10E12).AND.(Sa.GE.Samp))
+
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+10E7
+               end do
+
+               do while ((jj.GE.10E12).AND.(jj.LT.10E16).AND.(Sa.GE.Samp))
+
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+10E10
+               end do
+
+               do while ((jj.GT.10E16).AND.(jj.LT.10E25).AND.(Sa.GE.Samp))
+
+                  ff=A1*log10(jj)+B1
+                  uu=A2*log10(jj)+B2
+                  vv=A3*log10(jj)+B3
+                  C2=ff*(1-Smean/UTS)**uu
+                  C3=((UCS/UTS)+(Smean/UTS))**vv
+                  Sa=C2*C3*UTS
+                  jj=jj+10E12
+               end do
+               Damage=Damage+nn/jj
+               !WRITE (50, *) Range/Fact,nn/jj
+               !WRITE (50, *) Sa,Samp
+               jj=1.0
+               Sa=10000.0
+
             end do
-
-            Sm=UTS
-            C2=0
-            C3=((UCS/UTS)+(Sm/UTS))**vv
-            Sa=C2*C3*UTS
-            write(20,*) ONC(t),Sa,Sm
-
+            WRITE (50, *) MaxStlev, (1/Damage)
+            Rewind(30)
+            MaxStlev=0
          end do
 
-   10    CLOSE(UNIT=10)
-         CLOSE(UNIT=20)
+         CLOSE(UNIT=30)
+         CLOSE(UNIT=40)
+         CLOSE(UNIT=50)
+
+
 
       END
 
