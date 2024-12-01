@@ -1,6 +1,6 @@
 # CCFatigue Platform
 
-CCFatiguePlatform is an initiative from CCLab that aims to develop a web application to faciltate manipulation and harmonized storage of composite materials testing datasets.
+CCFatiguePlatform is an initiative from GR-MeC that aims to develop a web application to faciltate manipulation, harmonized storage and analysis of composite materials testing datasets.
 
 [Demo](https://ccfatigue-test.epfl.ch/)
 
@@ -68,4 +68,3 @@ MIT
 
 # Contributors
 
-Charlotte Weil, Samuel Bancal, David Tang, Nicolas Dubois, Pierre Guilbert, Yannick Marcon Scott M. Salmon, Anastasios Vassilopoulos, Shayan Khalooei
